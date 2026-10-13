@@ -1,0 +1,40 @@
+# ---- Python / 打包
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.spec
+
+# ---- 运行时生成（每台电脑不同，不要提交）
+config.json
+.cache/
+*.log
+*.log.old
+
+# ---- 典礼素材（PPT / 视频 / 图片很大，不放进仓库）
+Example/
+PPT/
+~$*
+._*
+*.ppt
+*.pptx
+*.pptm
+*.pps
+*.ppsx
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.wmv
+*.mp3
+*.wav
+*.psd
+
+# ---- 系统 / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1013">
+<title>PPT 控制台</title>
+<style>
+:root{
+  --bg:#0e1013; --panel:#16191e; --panel2:#1c2027; --line:#2a2f38; --line2:#363c47;
+  --text:#e8eaee; --muted:#8b93a1; --dim:#5d6470;
+  --live:#ff3b3b; --live-bg:rgba(255,59,59,.12);
+  --standby:#ffb020; --standby-bg:rgba(255,176,32,.12);
+  --go:#1fbf6a; --accent:#4c8dff; --accent-bg:rgba(76,141,255,.14);
+  --radius:10px;
+  font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text)}
+body{display:grid;grid-template-rows:auto 1fr auto;height:100dvh;overflow:hidden;font-size:14px}
+button{white-space:nowrap;font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:8px 12px;cursor:pointer;touch-action:manipulation;user-select:none}
+button:hover{border-color:#4a5260;background:#232832}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.4;cursor:default}
+kbd{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--muted);border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;padding:0 4px;margin-left:6px}
+.num{font-variant-numeric:tabular-nums}
+
+/* header */
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.5px;white-space:nowrap}
+header h1 .ver{font-size:11px;font-weight:600;color:var(--dim);letter-spacing:0;margin-left:2px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line2);color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.ok .dot{background:var(--go)} .bad .dot{background:var(--live)}
+.busy .dot{background:var(--standby);animation:bl 1s ease-in-out infinite}
+.busy{color:var(--standby);border-color:rgba(255,176,32,.5)}
+@keyframes bl{50%{opacity:.25}}
+.folder{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.hbtns{display:flex;gap:8px}
+.hbtns button{padding:6px 10px;font-size:13px}
+
+/* main */
+main{display:grid;grid-template-columns:minmax(280px,360px) 1fr;min-height:0}
+#cues{border-right:1px solid var(--line);overflow:auto;padding:8px;background:var(--panel)}
+.cue{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius);border:1px solid transparent;cursor:pointer;margin-bottom:4px;position:relative}
+.cue:hover{background:var(--panel2)}
+.cue.sel{background:var(--accent-bg);border-color:rgba(76,141,255,.45)}
+.cue.standby{border-color:var(--standby);background:var(--standby-bg)}
+.cue.live{border-color:var(--live);background:var(--live-bg)}
+.cue .n{font-weight:700;font-size:15px;text-align:center;color:var(--muted)}
+.cue.live .n{color:var(--live)} .cue.standby .n{color:var(--standby)}
+.cue .t{min-width:0}
+.cue .t b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cue .t small{color:var(--dim);font-size:11px;display:flex;gap:8px;align-items:center;margin-top:2px}
+.tag{font-size:10px;padding:0 6px;border-radius:4px;border:1px solid var(--line2);color:var(--muted);letter-spacing:.5px}
+.tag.video{color:#c58cff;border-color:#5b3d80} .tag.audio{color:#55c7e0;border-color:#2c5a66}
+.loaded{color:var(--go)}
+.badge{font-size:10px;font-weight:800;letter-spacing:1px;padding:1px 6px;border-radius:4px}
+.badge.l{background:var(--live);color:#fff} .badge.s{background:var(--standby);color:#1a1200}
+.cue .acts{display:flex;gap:4px}
+.cue .acts button{padding:5px 9px;font-size:12px}
+.cue .acts .play{background:#1d3a2a;border-color:#2d6b48;color:#bff5d5}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.group{font-size:11px;color:var(--dim);padding:10px 10px 4px;letter-spacing:1px}
+
+#stage{display:grid;grid-template-rows:auto 1fr;min-height:0;overflow:hidden}
+.monitors{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,32%);gap:14px;padding:14px;min-height:0}
+.mon{position:relative;background:#000;border-radius:var(--radius);overflow:hidden;border:2px solid var(--line);aspect-ratio:16/9;width:100%}
+.mon.live{border-color:var(--live)}
+.mon img{width:100%;height:100%;object-fit:contain;display:block}
+.mon .ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:15px;text-align:center;padding:20px}
+.mon .lbl{position:absolute;left:10px;top:10px;font-size:11px;font-weight:800;letter-spacing:1.5px;padding:3px 8px;border-radius:5px;background:rgba(0,0,0,.65)}
+.mon.live .lbl{background:var(--live);color:#fff}
+.mon .ov{position:absolute;inset:0;display:none;place-items:center;font-size:22px;font-weight:700;letter-spacing:4px}
+.mon.black .ov{display:grid;background:rgba(0,0,0,.92);color:#777}
+.mon.white .ov{display:grid;background:rgba(255,255,255,.92);color:#888}
+.mon.done .ov{display:grid;background:rgba(0,0,0,.92);color:#777}
+.side{display:flex;flex-direction:column;gap:12px;min-height:0}
+.info{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.info .deck{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.info .cnt{font-size:34px;font-weight:800;line-height:1.1;margin-top:4px}
+.info .cnt span{font-size:18px;color:var(--muted);font-weight:600}
+.info .st{margin-top:6px;font-size:12px;color:var(--muted)}
+.notes{flex:1;min-height:60px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;white-space:pre-wrap;font-size:15px;line-height:1.55}
+.notes:empty::before{content:"（本页没有备注）";color:var(--dim);font-size:13px}
+.notes-h{font-size:11px;color:var(--dim);letter-spacing:1px;margin-bottom:-6px}
+
+.strip-wrap{display:flex;flex-direction:column;min-height:0;border-top:1px solid var(--line)}
+.strip-h{display:flex;align-items:center;gap:10px;padding:10px 14px}
+.strip-h .ttl{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.strip-h .ttl small{color:var(--muted);font-weight:400;margin-left:8px}
+#strip{flex:1 1 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));grid-auto-rows:max-content;gap:10px;padding:0 14px 14px;overflow:auto;align-content:start;min-height:0}
+.th{position:relative;flex-shrink:0;border-radius:8px;overflow:hidden;border:2px solid var(--line);background:#000;cursor:pointer;aspect-ratio:16/9}
+.th:hover{border-color:#556}
+.th.cur{border-color:var(--live)}
+.th.pending:not(.cur){border-color:var(--standby);border-style:dashed}
+.th.hid{opacity:.45}
+.th img{width:100%;height:100%;object-fit:contain;display:block}
+.th .i{position:absolute;left:5px;bottom:5px;font-size:11px;font-weight:700;background:rgba(0,0,0,.75);padding:1px 6px;border-radius:4px}
+.th.cur .i{background:var(--live)}
+.th .tt{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:12px;padding:8px;text-align:center}
+.empty{color:var(--dim);padding:30px;text-align:center}
+
+/* footer controls */
+footer{display:flex;align-items:stretch;gap:10px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--panel)}
+footer .grp{display:flex;gap:8px}
+footer button{padding:12px 16px;font-size:15px;font-weight:600}
+#bNext{min-width:150px;background:#20324f;border-color:#35558a}
+#bBlack.on{background:#000;border-color:#888}
+#bWhite.on{background:#eee;color:#111}
+.sp{flex:1}
+.go{display:flex;align-items:center;gap:10px;border:1px solid var(--standby);background:var(--standby-bg);border-radius:10px;padding:4px 4px 4px 12px;min-width:0}
+.go .lab{font-size:11px;color:var(--standby);letter-spacing:1px;font-weight:800}
+.go .nm{font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bGo{background:var(--go);border-color:var(--go);color:#03140a;font-weight:900;letter-spacing:2px;min-width:96px}
+#bGo:hover{filter:brightness(1.1)}
+
+.banner{display:none;align-items:center;gap:12px;padding:8px 16px;background:#2a1d3f;border-bottom:1px solid #5b3d80;font-size:13px}
+.banner.show{display:flex}
+.prog{height:3px;background:var(--line);position:relative}
+.prog i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);transition:width .3s}
+
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#3a1a1a;border:1px solid #803030;color:#ffd5d5;padding:10px 16px;border-radius:8px;display:none;max-width:90vw;z-index:20}
+#toast.info{background:#1a2a3a;border-color:#30608a;color:#d5e8ff}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line2);border-radius:12px;padding:20px;width:min(520px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h3{margin:0 0 14px}
+dialog label{display:block;margin:12px 0 6px;color:var(--muted);font-size:13px}
+dialog{width:min(600px,94vw);max-height:90vh;overflow:auto}
+dialog h4{margin:20px 0 8px;font-size:14px} dialog h4 small{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
+dialog label.chk{display:flex;gap:8px;align-items:center;color:var(--text)}
+.hk{display:grid;grid-template-columns:1fr 170px auto;gap:6px 10px;align-items:center}
+.hk input{text-align:center;cursor:pointer;font-family:ui-monospace,Consolas,monospace!important}
+.hk input:focus{outline:2px solid var(--standby);background:var(--standby-bg)!important}
+.hk .bad{grid-column:1/-1;color:var(--live);font-size:12px;margin:-2px 0 4px}
+.hk button{padding:6px 10px;font-size:12px}
+.hknote{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
+#bDebug.on{background:rgba(255,176,32,.14);border-color:var(--standby);color:#ffe2a8}
+#bTop.on{background:var(--accent-bg);border-color:var(--accent);color:#cfe0ff}
+dialog input[type=text],dialog input[type=password]{width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--line2);background:var(--bg);color:var(--text);font:inherit}
+dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.help{font-size:12px;color:var(--muted);line-height:1.8;margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+
+#cueToggle{display:none}
+@media (max-width:900px){
+  body{overflow:auto;height:auto;min-height:100dvh}
+  main{grid-template-columns:1fr}
+  #cues{border-right:0;border-bottom:1px solid var(--line);max-height:40vh}
+  #cues.collapsed{display:none}
+  #cueToggle{display:inline-block}
+  .monitors{grid-template-columns:1fr}
+  .folder,.hbtns .wide{display:none}
+  footer{flex-wrap:wrap;position:sticky;bottom:0}
+  footer .grp{flex:1}
+  footer .grp button{flex:1;padding:14px 6px;font-size:14px}
+  header{flex-wrap:wrap}
+  #bNext{min-width:0;flex:2!important}
+  .sp{display:none}
+  .go{width:100%}
+  .go .nm{max-width:none;flex:1}
+  kbd{display:none}
+  #strip{flex:none;overflow:visible}
+  #stage{overflow:visible}
+  #bGo{min-width:120px}
+}
+</style>
+</head>
+<body>
+<div>
+  <header>
+    <h1>PPT 控制台 <span id="ver" class="ver"></span></h1>
+    <span id="ppStat" class="pill"><span class="dot"></span><span>连接中…</span></span>
+    <span class="folder" id="folder"></span>
+    <div class="hbtns">
+      <button id="cueToggle">节目单</button>
+      <button id="bPreload" class="wide" title="把所有 PPT 提前在后台打开，切换时不用等">预加载全部</button>
+      <button id="bRefresh" title="重新扫描文件夹">刷新</button>
+      <button id="bDebug" style="display:none" title="打开一个命令行窗口，实时显示运行日志（可随时关掉，不影响放映）">🐞 调试</button>
+      <button id="bTop" style="display:none" title="让控制台窗口一直在最上层">📌 置顶</button>
+      <button id="bSettings">设置</button>
+    </div>
+  </header>
+  <div class="prog" id="prog" style="display:none"><i></i></div>
+  <div class="banner" id="media"><span>▶ 正在播放视频：<b id="mediaName"></b></span><span class="sp"></span><button id="bStopMedia">停止播放</button></div>
+</div>
+
+<main>
+  <aside id="cues"></aside>
+  <section id="stage">
+    <div class="monitors">
+      <div class="mon" id="monLive">
+        <img id="imgLive" alt="">
+        <div class="ph" id="phLive">目前没有放映<br><small>在左边点 ▶ 开始，或设好待命后按 GO</small></div>
+        <div class="ov" id="ovLive"></div>
+        <span class="lbl">LIVE</span>
+      </div>
+      <div class="side">
+        <div class="info">
+          <div class="deck" id="liveDeck">—</div>
+          <div class="cnt num" id="liveCnt">– <span>/ –</span></div>
+          <div class="st" id="liveState">未放映</div>
+        </div>
+        <div class="mon" id="monNext">
+          <img id="imgNext" alt="">
+          <div class="ph" id="phNext">下一页</div>
+          <span class="lbl">下一页</span>
+        </div>
+        <div class="notes-h">演讲者备注</div>
+        <div class="notes" id="notes"></div>
+      </div>
+    </div>
+    <div class="strip-wrap">
+      <div class="strip-h">
+        <div class="ttl" id="stripTitle">选择一份 PPT 查看所有页面</div>
+        <button id="bStartSel" style="display:none">▶ 从第 1 页放映</button>
+        <button id="bCloseSel" style="display:none" title="从 PowerPoint 后台关闭这个文件，释放内存">关闭文件</button>
+      </div>
+      <div id="strip"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="grp">
+    <button id="bPrev">◀ 上一页<kbd>←</kbd></button>
+    <button id="bNext">下一页 ▶<kbd>→</kbd></button>
+  </div>
+  <div class="grp">
+    <button id="bBlack">黑屏<kbd>B</kbd></button>
+    <button id="bWhite">白屏<kbd>W</kbd></button>
+    <button id="bEnd">结束放映<kbd>Esc</kbd></button>
+  </div>
+  <div class="sp"></div>
+  <div class="go">
+    <div><div class="lab">待命 STANDBY <span id="goAuto" style="display:none" title="PPT 放到结尾时会自动开始这个节目（可在设置里关掉）">· 播完自动接</span></div><div class="nm" id="sbName">—</div></div>
+    <button id="bGo" title="开始待命的节目，并自动把下一个节目设为待命">GO<kbd style="color:#03140a;border-color:#0a5">Enter</kbd></button>
+  </div>
+</footer>
+
+<div id="toast"></div>
+
+<dialog id="dlgSettings">
+  <h3>设置</h3>
+  <label>PPT 所在文件夹（填电脑上的完整路径）</label>
+  <input type="text" id="setFolder" placeholder="D:\典礼\PPT">
+  <label class="chk"><input type="checkbox" id="setEndPrev"> 切换到另一份 PPT 时，自动结束上一份的放映</label>
+  <label class="chk"><input type="checkbox" id="setAuto"> PPT 放到结尾时再按下一页，自动开始待命的节目（翻页笔、快捷键也有效）</label>
+
+  <h4>全局快捷键 <small>PowerPoint 在前台放映时也有效。点一下输入框再按键；Backspace 清除</small></h4>
+  <div id="hkList" class="hk"></div>
+  <div class="hknote">设了全局快捷键的按键会被控制台独占，其他程序收不到，所以请用放映时用不到的键（例如 F8–F11 或 Ctrl+Alt+字母；F12 被 Windows 保留，不能用）。</div>
+
+  <div class="help">
+    控制台窗口内的按键：→ / 空格 / PageDown 下一页 · ← / PageUp 上一页 · Home 第一页 · End 最后一页<br>
+    B 黑屏 · W 白屏 · Esc 结束放映 · Enter = GO · S 把选中的设为待命 · ↑↓ 在节目单中移动选择<br>
+    节目单：单击 = 查看页面 · 双击或 ▶ = 立刻放映 · ★ = 设为待命<br>
+    其他设置（启动时预加载、缩略图大小）在程序旁边的 config.json 里。
+  </div>
+  <div class="row"><button id="setCancel">取消</button><button id="setSave" style="background:var(--accent);border-color:var(--accent);color:#fff">保存</button></div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const S = {
+  items: [], status: null, sel: null, standby: null,
+  decks: {}, opening: new Set(), lastLiveKey: "", seen: new Set(), v: "",
+};
+
+async function api(path, body, signal){
+  const opt = {headers:{}, signal};
+  if(body !== undefined){ opt.method="POST"; opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(()=>({ok:false,error:"服务器无响应"}));
+  if(j.ok === false) throw new Error(j.error||"出错了");
+  return j;
+}
+function thumb(id, n){ return `/api/thumb/${id}/${n}`; }
+let toastT;
+function toast(msg, info){ const t=$("#toast"); t.textContent=msg; t.className=info?"info":""; t.style.display="block"; clearTimeout(toastT); toastT=setTimeout(()=>t.style.display="none", info?2200:4500); }
+function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmtSize(b){ return b>1e9?(b/1e9).toFixed(1)+" GB":b>1e6?(b/1e6).toFixed(0)+" MB":(b/1e3).toFixed(0)+" KB"; }
+const byId = id => S.items.find(i=>i.id===id);
+const TYPE = {ppt:"PPT", video:"视频", audio:"音频"};
+
+/* ---------- 节目单 ---------- */
+async function loadItems(refresh){
+  try{
+    const j = await api("/api/items"+(refresh?"?refresh=1":""));
+    S.items = j.items;
+    if(j.version) $("#ver").textContent = "v" + j.version;
+    $("#folder").textContent = j.folder + (j.folder_exists ? "" : "（文件夹不存在，请到设置里修改）");
+    $("#folder").title = j.folder;
+    renderCues();
+  }catch(e){ toast(e.message); }
+}
+
+function renderCues(){
+  const st = S.status || {};
+  const liveId = st.live?.id;
+  const loaded = new Set(st.loaded||[]);
+  const el = $("#cues");
+  if(!S.items.length){ el.innerHTML = `<div class="empty">文件夹里没有找到 PPT 或视频</div>`; return; }
+  let html = "", lastGroup = null;
+  for(const it of S.items){
+    const g = it.num ? "节目" : "其他文件";
+    if(g !== lastGroup){ if(lastGroup!==null || g!=="节目") html += `<div class="group">${g}</div>`; lastGroup = g; }
+    const cls = ["cue"]; if(it.id===S.sel) cls.push("sel"); if(it.id===S.standby) cls.push("standby"); if(it.id===liveId) cls.push("live");
+    const live = it.id===liveId || (it.type!=="ppt" && st.media?.playing && st.media.name===it.name);
+    const badge = live ? `<span class="badge l">LIVE</span>` : it.id===S.standby ? `<span class="badge s">待命</span>` : "";
+    const ld = it.type==="ppt" ? (S.opening.has(it.id) ? `<span class="spin"></span> 打开中` : loaded.has(it.id) ? `<span class="loaded">● 已加载</span>` : "") : "";
+    html += `<div class="${cls.join(" ")}" data-id="${it.id}">
+      <div class="n num">${esc(it.num||"·")}</div>
+      <div class="t"><b title="${esc(it.name)}">${esc(it.title)}</b>
+        <small><span class="tag ${it.type}">${TYPE[it.type]}</span>${fmtSize(it.size)} ${ld} ${badge}</small></div>
+      <div class="acts"><button class="sb" title="设为待命">★</button><button class="play" title="立刻放映">▶</button></div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+$("#cues").addEventListener("click", e=>{
+  const row = e.target.closest(".cue"); if(!row) return;
+  const id = row.dataset.id;
+  if(e.target.closest(".play")) return startItem(id);
+  if(e.target.closest(".sb")) { setStandby(id); renderCues(); return; }
+  selectItem(id);
+});
+$("#cues").addEventListener("dblclick", e=>{ const row=e.target.closest(".cue"); if(row && !e.target.closest("button")) startItem(row.dataset.id); });
+
+// 待命由后台管理（快捷键、翻页笔、自动接续都要用到），界面只负责显示和发请求
+function showStandby(id){
+  S.standby = id || null;
+  const it = byId(id);
+  $("#sbName").textContent = it ? `${it.num?it.num+" ":""}${it.title}` : "—（节目单结束）";
+  $("#bGo").disabled = !it;
+}
+async function setStandby(id){
+  showStandby(id); renderCues();
+  try{ await api("/api/standby", {id}); }catch(e){ toast(e.message); }
+}
+
+async function openDeck(id){
+  if(S.decks[id]) return S.decks[id];
+  S.opening.add(id); renderCues();
+  try{ const d = await api("/api/deck/"+id); S.decks[id] = d; return d; }
+  finally{ S.opening.delete(id); renderCues(); }
+}
+
+async function selectItem(id){
+  S.sel = id; renderCues();
+  const it = byId(id);
+  $("#bStartSel").style.display = "";
+  $("#bCloseSel").style.display = it.type==="ppt" ? "" : "none";
+  $("#bStartSel").textContent = it.type==="ppt" ? "▶ 从第 1 页放映" : "▶ 播放";
+  if(it.type !== "ppt"){
+    $("#stripTitle").innerHTML = `${esc(it.title)}<small>${TYPE[it.type]} · ${fmtSize(it.size)}</small>`;
+    $("#strip").innerHTML = `<div class="empty">${TYPE[it.type]}文件会用${S.status?.media?.vlc ? " VLC 全屏" : "电脑默认播放器"}播放</div>`;
+    return;
+  }
+  $("#stripTitle").innerHTML = `${esc(it.title)}<small>正在打开…</small>`;
+  $("#strip").innerHTML = `<div class="empty"><span class="spin"></span> 正在 PowerPoint 后台打开（大文件需要几秒）</div>`;
+  try{
+    const d = await openDeck(id);
+    if(S.sel !== id) return;
+    renderStrip();
+  }catch(e){ toast(e.message); $("#strip").innerHTML = `<div class="empty">打不开：${esc(e.message)}</div>`; }
+}
+
+function renderStrip(){
+  const id = S.sel, it = byId(id), d = S.decks[id];
+  if(!it || !d) return;
+  $("#stripTitle").innerHTML = `${esc(it.title)}<small>${d.count} 页</small>`;
+  let h = "";
+  for(let i=1;i<=d.count;i++){
+    const t = d.titles[i-1] || "";
+    h += `<div class="th${d.hidden[i-1]?" hid":""}" data-n="${i}" title="${esc(t)}">
+      <div class="tt">${esc(t||("第 "+i+" 页"))}</div>
+      <img loading="lazy" src="${thumb(id,i)}" onerror="this.remove()" alt="">
+      <span class="i num">${i}${d.hidden[i-1]?" · 隐藏":""}</span></div>`;
+  }
+  $("#strip").innerHTML = h;
+  markStripCurrent();
+}
+function markStripCurrent(){
+  const live = S.status?.live;
+  if(live?.slide) document.querySelectorAll(`#strip .th.pending`).forEach(x=>{ if(+x.dataset.n===live.slide) x.classList.remove("pending"); });
+  document.querySelectorAll("#strip .th").forEach(el=>{
+    el.classList.toggle("cur", !!live && live.id===S.sel && +el.dataset.n===live.slide);
+  });
+}
+$("#strip").addEventListener("click", e=>{
+  const th = e.target.closest(".th"); if(!th) return;
+  const n = +th.dataset.n;
+  if(S.status?.live?.id === S.sel){
+    // 先在界面上标出点了哪一页，PowerPoint 跳完后再由状态更新确认
+    document.querySelectorAll("#strip .th.pending").forEach(x=>x.classList.remove("pending"));
+    th.classList.add("pending");
+    nav("goto", n);
+  }
+  else startItem(S.sel, n);
+});
+$("#bStartSel").onclick = ()=> S.sel && startItem(S.sel, 1);
+$("#bCloseSel").onclick = async ()=>{
+  if(!S.sel) return;
+  try{ await api("/api/close",{id:S.sel}); delete S.decks[S.sel]; toast("已关闭",1); poll(); }catch(e){ toast(e.message); }
+};
+
+/* ---------- 放映控制 ---------- */
+async function startItem(id, slide){
+  const it = byId(id); if(!it) return;
+  if(it.type === "ppt"){
+    if(S.starting) return toast("正在切换中，请稍等…", 1);
+    S.starting = true;
+  }
+  if(it.type === "ppt"){ S.opening.add(id); renderCues(); }
+  try{
+    const j = await api("/api/start", {id, slide: slide||1});
+    if(it.type!=="ppt") toast("正在播放："+it.title, 1);
+    if(S.sel !== id) selectItem(id);
+  }catch(e){ toast(e.message); }
+  finally{ if(it.type === "ppt") S.starting = false; S.opening.delete(id); renderCues(); poll(); }
+}
+async function go(){
+  if(!S.standby) return toast("没有待命的节目（节目单已经播完）", 1);
+  if(S.starting) return toast("正在切换中，请稍等…", 1);
+  S.starting = true;
+  const id = S.standby;
+  S.opening.add(id); renderCues();
+  try{
+    await api("/api/go", {});
+    const it = byId(id);
+    if(it && it.type !== "ppt") toast("正在播放："+it.title, 1);
+    if(S.sel !== id) selectItem(id);
+  }catch(e){ toast(e.message); }
+  finally{ S.starting = false; S.opening.delete(id); renderCues(); }
+}
+let navBusy = false;
+async function nav(action, slide){
+  if(navBusy && ["next","prev","goto"].includes(action)) return;
+  navBusy = true;
+  try{ await api("/api/nav", {action, slide}); }
+  catch(e){ toast(e.message); }
+  finally{ navBusy = false; poll(); }
+}
+
+$("#bPrev").onclick = ()=>nav("prev");
+$("#bNext").onclick = ()=>nav("next");
+$("#bBlack").onclick = ()=>nav("black");
+$("#bWhite").onclick = ()=>nav("white");
+$("#bEnd").onclick = ()=>nav("end");
+$("#bGo").onclick = go;
+$("#bStopMedia").onclick = async ()=>{ try{ await api("/api/media/stop",{}); poll(); }catch(e){ toast(e.message); } };
+$("#bPreload").onclick = async ()=>{ try{ await api("/api/preload",{}); toast("开始在后台加载所有 PPT…",1); poll(); }catch(e){ toast(e.message); } };
+$("#bRefresh").onclick = ()=>{ S.decks = {}; loadItems(true); };
+$("#cueToggle").onclick = ()=>$("#cues").classList.toggle("collapsed");
+
+document.addEventListener("keydown", e=>{
+  if(e.target.matches("input,textarea") || document.querySelector("dialog[open]")) return;
+  const k = e.key;
+  const map = {ArrowRight:"next"," ":"next",PageDown:"next",ArrowLeft:"prev",PageUp:"prev",Home:"first",End:"last",b:"black",B:"black",".":"black",w:"white",W:"white",",":"white",Escape:"end"};
+  if(map[k]){ e.preventDefault(); nav(map[k]); return; }
+  if(k==="Enter"){ e.preventDefault(); go(); return; }
+  if(k==="s"||k==="S"){ if(S.sel){ setStandby(S.sel); renderCues(); } return; }
+  if(k==="ArrowDown"||k==="ArrowUp"){
+    e.preventDefault();
+    const i = S.items.findIndex(x=>x.id===S.sel);
+    const j = Math.max(0, Math.min(S.items.length-1, (i<0?0:i+(k==="ArrowDown"?1:-1))));
+    if(S.items[j]){ selectItem(S.items[j].id); document.querySelector(`.cue[data-id="${S.items[j].id}"]`)?.scrollIntoView({block:"nearest"}); }
+  }
+});
+
+/* ---------- 状态轮询 ---------- */
+const STATE_TXT = {1:"放映中",2:"暂停",3:"黑屏中",4:"白屏中",5:"已到结尾（再按下一页会结束放映）"};
+function setImg(img, ph, src, phText){
+  if(!src){ img.style.display="none"; img.removeAttribute("src"); ph.style.display=""; ph.innerHTML=phText; return; }
+  if(img.dataset.src !== src){
+    img.dataset.src = src;
+    img.onload = ()=>{ img.style.display=""; ph.style.display="none"; };
+    img.onerror = ()=>{ img.style.display="none"; ph.style.display=""; ph.innerHTML=phText; };
+    img.src = src;
+  }
+}
+function renderStatus(){
+  const st = S.status; if(!st) return;
+  const pp = $("#ppStat");
+  if(st.busy){
+    pp.className = "pill busy";
+    pp.lastElementChild.textContent = `PowerPoint 忙碌：${st.busy}` + (st.busy_for >= 2 ? `（${Math.round(st.busy_for)} 秒）` : "");
+  }else{
+    pp.className = "pill " + (st.powerpoint ? "ok" : "bad");
+    pp.lastElementChild.textContent = st.mock ? "演示模式" : st.powerpoint ? "PowerPoint 已连接" : "PowerPoint 未启动";
+  }
+  // 预加载
+  const pl = st.preload;
+  $("#prog").style.display = pl.running ? "" : "none";
+  if(pl.running){ $("#prog i").style.width = (pl.total ? pl.done/pl.total*100 : 0)+"%"; $("#bPreload").textContent = `加载中 ${pl.done}/${pl.total}`; $("#bPreload").disabled = true; }
+  else { $("#bPreload").textContent = "预加载全部"; $("#bPreload").disabled = false; }
+  // 视频
+  $("#media").classList.toggle("show", !!st.media?.playing);
+  $("#mediaName").textContent = st.media?.name || "";
+  // LIVE
+  const L = st.live, mon = $("#monLive");
+  mon.classList.toggle("live", !!L);
+  mon.classList.toggle("black", L?.state===3);
+  mon.classList.toggle("white", L?.state===4);
+  mon.classList.toggle("done", L?.state===5);
+  $("#ovLive").textContent = L?.state===3 ? "黑 屏" : L?.state===4 ? "白 屏" : L?.state===5 ? "放映结尾" : "";
+  $("#bBlack").classList.toggle("on", L?.state===3);
+  $("#bWhite").classList.toggle("on", L?.state===4);
+  ["#bPrev","#bNext","#bBlack","#bWhite","#bEnd"].forEach(s=>$(s).disabled = !L);
+  const it = L ? byId(L.id) : null;
+  if(L){
+    $("#liveDeck").textContent = it ? `${it.num?it.num+" ":""}${it.title}` : "（不在节目单里的 PPT）";
+    $("#liveCnt").innerHTML = `${L.slide ?? "–"} <span>/ ${L.count}</span>`;
+    $("#liveState").textContent = STATE_TXT[L.state] || "";
+    const d = L.id && S.decks[L.id];
+    const ready = new Set(L.ready || []);
+    const ok = n => L.id && n && (st.mock || ready.has(n) || S.seen.has(L.id+"/"+n));
+    setImg($("#imgLive"), $("#phLive"), ok(L.slide) ? thumb(L.id, L.slide) : null, L.slide ? `第 ${L.slide} 页` : "放映结尾");
+    let nx = L.slide ? L.slide+1 : null;
+    while(d && nx && nx<=L.count && d.hidden[nx-1]) nx++;
+    setImg($("#imgNext"), $("#phNext"), nx && nx<=L.count && ok(nx) ? thumb(L.id, nx) : null, nx && nx<=L.count ? `第 ${nx} 页` : "（最后一页）");
+    // 让浏览器先把接下来几页的图下载好，翻页时直接显示
+    for(const n of ready){ const k = L.id+"/"+n; if(!S.seen.has(k)){ S.seen.add(k); const im = new Image(); im.src = thumb(L.id, n); } }
+    $("#notes").textContent = L.notes_off ? "（这份 PPT 读取备注太慢，已停用备注显示，不影响放映）" : (L.notes || "");
+  }else{
+    $("#liveDeck").textContent = "—"; $("#liveCnt").innerHTML = `– <span>/ –</span>`; $("#liveState").textContent = "未放映";
+    setImg($("#imgLive"), $("#phLive"), null, `目前没有放映<br><small>在左边点 ▶ 开始，或设好待命后按 GO</small>`);
+    setImg($("#imgNext"), $("#phNext"), null, "下一页");
+    $("#notes").textContent = "";
+  }
+  // 放映的 PPT 换了：自动切换下方页面列表
+  const key = L ? `${L.id}` : "";
+  if(key !== S.lastLiveKey){ S.lastLiveKey = key; if(L?.id && L.id !== S.sel) selectItem(L.id); }
+  markStripCurrent();
+  const cs = document.querySelector("#strip .th.cur");
+  if(cs && L && L.slide !== S._lastSlide){ S._lastSlide = L.slide; cs.scrollIntoView({block:"nearest", behavior:"smooth"}); }
+}
+// 长轮询：服务器在状态变化的瞬间才回复，所以翻页后网页几乎同步更新
+function poll(){}   // 状态由服务器主动推送，动作之后不需要另外查询
+async function statusLoop(){
+  for(;;){
+    try{
+      const res = await api("/api/status?v=" + encodeURIComponent(S.v));
+      const prevLoaded = (S.status?.loaded||[]).join(), prevLive = S.status?.live?.id, prevMedia = S.status?.media?.name;
+      const sbChanged = (res.standby || null) !== S.standby;
+      if(sbChanged) showStandby(res.standby);
+      $("#goAuto").style.display = res.auto_advance ? "" : "none";
+      S.status = res; S.v = res.v;
+      renderStatus();
+      if(sbChanged || prevLoaded !== res.loaded.join() || prevLive !== res.live?.id || prevMedia !== res.media?.name) renderCues();
+    }catch(e){
+      $("#ppStat").className = "pill bad"; $("#ppStat").lastElementChild.textContent = "控制台已断开，重连中…";
+      S.v = "";
+      await new Promise(r=>setTimeout(r, 1000));
+    }
+  }
+}
+
+/* ---------- 设置 / 快捷键 ---------- */
+let HK = {};
+function keyName(e){
+  const k = e.key;
+  if(["Control","Shift","Alt","Meta","OS"].includes(k)) return null;
+  const map = {" ":"Space","ArrowLeft":"Left","ArrowRight":"Right","ArrowUp":"Up","ArrowDown":"Down","Escape":"Esc","Enter":"Enter",
+               "PageUp":"PageUp","PageDown":"PageDown","Home":"Home","End":"End","Insert":"Insert","Delete":"Delete","Pause":"Pause","Tab":"Tab"};
+  let name = map[k] || (/^F\d{1,2}$/.test(k) ? k : null);
+  if(!name && e.code){
+    if(/^Key[A-Z]$/.test(e.code)) name = e.code.slice(3);
+    else if(/^Digit\d$/.test(e.code)) name = e.code.slice(5);
+    else if(/^Numpad\d$/.test(e.code)) name = "Numpad" + e.code.slice(6);
+  }
+  if(!name) return null;
+  const mods = [];
+  if(e.ctrlKey) mods.push("Ctrl"); if(e.altKey) mods.push("Alt"); if(e.shiftKey) mods.push("Shift"); if(e.metaKey) mods.push("Win");
+  return [...mods, name].join("+");
+}
+function renderHotkeys(j){
+  const failed = j.hotkeys?.failed || {};
+  let h = "";
+  for(const [act, label] of j.actions){
+    h += `<div>${esc(label)}</div>
+      <input type="text" readonly data-act="${act}" value="${esc(HK[act]||"")}" placeholder="（未设定）">
+      <button data-clear="${act}">清除</button>`;
+    if(failed[act]) h += `<div class="bad">⚠ ${esc(HK[act]||"")}：${esc(failed[act])}</div>`;
+  }
+  if(!j.hotkeys?.available) h += `<div class="bad" style="color:var(--muted)">（全局快捷键只在 Windows 上可用）</div>`;
+  $("#hkList").innerHTML = h;
+}
+$("#hkList").addEventListener("keydown", e=>{
+  const inp = e.target.closest("input[data-act]"); if(!inp) return;
+  e.preventDefault(); e.stopPropagation();
+  if(e.key === "Backspace" || e.key === "Delete"){ inp.value = ""; HK[inp.dataset.act] = ""; return; }
+  const n = keyName(e); if(!n) return;
+  inp.value = n; HK[inp.dataset.act] = n;
+});
+$("#hkList").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-clear]"); if(!b) return;
+  HK[b.dataset.clear] = ""; $(`#hkList input[data-act="${b.dataset.clear}"]`).value = "";
+});
+$("#bSettings").onclick = async ()=>{
+  try{
+    await api("/api/hotkeys/suspend", {on:true});   // 设置期间暂停全局快捷键，才能把按键录进来
+    const j = await api("/api/config");
+    $("#setFolder").value = j.config.folder; $("#setEndPrev").checked = j.config.end_previous_show; $("#setAuto").checked = j.config.auto_advance !== false;
+    HK = {...j.config.hotkeys}; renderHotkeys(j);
+  }catch(e){ toast(e.message); }
+  $("#dlgSettings").showModal();
+};
+$("#dlgSettings").addEventListener("close", ()=>{ api("/api/hotkeys/suspend", {on:false}).catch(()=>{}); });
+$("#setCancel").onclick = ()=>$("#dlgSettings").close();
+$("#setSave").onclick = async ()=>{
+  try{
+    const j = await api("/api/config", {folder: $("#setFolder").value, end_previous_show: $("#setEndPrev").checked, auto_advance: $("#setAuto").checked, hotkeys: HK});
+    await api("/api/hotkeys/suspend", {on:false});
+    const j2 = await api("/api/config");
+    const failed = Object.keys(j2.hotkeys?.failed || {});
+    if(failed.length){ HK = {...j2.config.hotkeys}; renderHotkeys(j2); toast("有快捷键注册失败，请换一个按键"); return; }
+    $("#dlgSettings").close(); S.decks = {}; S.sel = null; loadItems(); toast("已保存",1);
+  }catch(e){ toast(e.message); }
+};
+
+/* ---------- 全局快捷键（由程序调用）/ 窗口置顶 ---------- */
+window.hotkey = act => {
+  if(act === "go") return go();
+  nav(act);
+};
+async function initDesktop(){
+  // 只有在程序窗口里（不是浏览器）才显示置顶按钮
+  let j; try{ j = await api("/api/window"); }catch(e){ return; }
+  if(!j.desktop) return;
+  const b = $("#bTop"); b.style.display = "";
+  const set = on => { b.classList.toggle("on", on); b.textContent = on ? "📌 已置顶" : "📌 置顶"; };
+  set(j.on_top);
+  b.onclick = async ()=>{
+    b.disabled = true;
+    try{ set((await api("/api/window", {on_top: !b.classList.contains("on")})).on_top); }
+    catch(e){ toast(e.message); }
+    finally{ b.disabled = false; }
+  };
+  document.addEventListener("contextmenu", e=>{ if(!e.target.matches("input,textarea")) e.preventDefault(); });
+}
+initDesktop();
+
+/* ---------- 调试窗口 ---------- */
+async function initDebug(){
+  const b = $("#bDebug");
+  const set = on => { b.classList.toggle("on", on); b.textContent = on ? "🐞 调试中" : "🐞 调试"; };
+  try{
+    const j = await api("/api/debug");
+    if(!j.available) return;
+    b.style.display = ""; set(j.open);
+    b.onclick = async ()=>{ try{ set((await api("/api/debug", {on: !b.classList.contains("on")})).open); }catch(e){ toast(e.message); } };
+    // 用户自己把调试窗口关掉时，按钮也要跟着变回来
+    setInterval(async ()=>{ try{ set((await api("/api/debug")).open); }catch(e){} }, 3000);
+  }catch(e){}
+}
+initDebug();
+
+showStandby(null);
+loadItems().then(statusLoop);
+</script>
+</body>
+</html>
