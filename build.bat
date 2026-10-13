@@ -18,9 +18,9 @@ if not exist ".venv\Scripts\python.exe" (
 
 rem ---- Version: taken from the first "## [X.Y]" heading in CHANGELOG.md
 echo [2/4] Reading version from CHANGELOG.md...
-".venv\Scripts\python.exe" version.py > "%TEMP%\ppt-presenter-ver.txt"
+".venv\Scripts\python.exe" -m presenter.version > "%TEMP%\ppt-presenter-ver.txt"
 if errorlevel 1 (
-  echo [!] No version found in CHANGELOG.md. Add a heading like:  ## [1.8] - 2026-10-14
+  echo [!] No version found in CHANGELOG.md. Add a heading like:  ## [2.0] - 2026-10-15
   pause
   exit /b 1
 )
@@ -50,6 +50,7 @@ if exist "dist\%NAME%.exe" (
   --add-data "static;static" ^
   --add-data "CHANGELOG.md;." ^
   --collect-all webview ^
+  --collect-submodules presenter ^
   --hidden-import win32com.client ^
   --hidden-import win32com.server.util ^
   --hidden-import pythoncom ^

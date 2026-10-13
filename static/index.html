@@ -121,6 +121,26 @@ footer button{padding:12px 16px;font-size:15px;font-weight:600}
 .prog{height:3px;background:var(--line);position:relative}
 .prog i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);transition:width .3s}
 
+.plwarn{line-height:1.7;font-size:14px}
+.plwarn ol{margin:4px 0 8px;padding-left:22px}
+.plwarn p{margin:6px 0}
+.plwarn code{background:var(--bg);padding:1px 6px;border-radius:4px;font-size:12px}
+.plwarn .danger{background:rgba(255,59,59,.1);border:1px solid rgba(255,59,59,.4);border-radius:8px;padding:8px 10px;color:#ffd5d5}
+.ov-wrap{position:fixed;inset:0;z-index:50;background:rgba(6,7,9,.86);backdrop-filter:blur(3px);display:grid;place-items:center;padding:16px}
+.ov-card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:24px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.ov-title{font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px}
+.spin.big{width:18px;height:18px;border-width:3px;border-color:var(--standby);border-top-color:transparent}
+.ov-warn{margin:10px 0 18px;padding:8px 12px;border-radius:8px;background:var(--standby-bg);border:1px solid rgba(255,176,32,.45);color:#ffe2a8;font-size:13px}
+.ov-phase{font-weight:600;margin-bottom:8px}
+.ov-bar{height:10px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.ov-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#7fb0ff);transition:width .25s}
+.ov-nums{display:flex;justify-content:space-between;margin-top:6px;font-size:13px;color:var(--muted)}
+.ov-cur{margin-top:12px;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov-time{margin-top:4px;font-size:13px;color:var(--muted)}
+.ov-sum{margin-top:14px;line-height:1.7;font-size:14px;max-height:50vh;overflow:auto}
+.fontwarn{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--standby-bg);border:1px solid rgba(255,176,32,.45);color:#ffe2a8;font-size:13px}
+.fontwarn ul{margin:6px 0;padding-left:20px}
+.ov-card .row{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#3a1a1a;border:1px solid #803030;color:#ffd5d5;padding:10px 16px;border-radius:8px;display:none;max-width:90vw;z-index:20}
 #toast.info{background:#1a2a3a;border-color:#30608a;color:#d5e8ff}
 dialog{background:var(--panel);color:var(--text);border:1px solid var(--line2);border-radius:12px;padding:20px;width:min(520px,92vw)}
@@ -174,7 +194,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
     <span class="folder" id="folder"></span>
     <div class="hbtns">
       <button id="cueToggle">节目单</button>
-      <button id="bPreload" class="wide" title="把所有 PPT 提前在后台打开，切换时不用等">预加载全部</button>
+      <button id="bPreload" class="wide" title="典礼开始前做一次：打开全部 PPT、生成所有缩略图和备注，放映时就不会延迟">预加载全部</button>
       <button id="bRefresh" title="重新扫描文件夹">刷新</button>
       <button id="bDebug" style="display:none" title="打开一个命令行窗口，实时显示运行日志（可随时关掉，不影响放映）">🐞 调试</button>
       <button id="bTop" style="display:none" title="让控制台窗口一直在最上层">📌 置顶</button>
@@ -239,6 +259,35 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
 </footer>
 
 <div id="toast"></div>
+
+<dialog id="dlgPreload">
+  <h3>⚠ 开始预加载？</h3>
+  <div class="plwarn">
+    <p>预加载会做三件事：</p>
+    <ol>
+      <li>在 PowerPoint 后台打开全部 <b id="plDecks">–</b> 份 PPT（共 <b id="plSize">–</b>）</li>
+      <li>为每一页生成缩略图</li>
+      <li>读取每一页的演讲者备注</li>
+    </ol>
+    <p>结果都会存进 <code>.cache</code>，之后放映、翻页都不用再临时读取，<b>延迟最低</b>；下次启动时已经做好的会直接跳过，会快很多。</p>
+    <p class="danger"><b>预加载期间不能放映、不能翻页，快捷键也会暂停。</b>第一次可能需要几分钟，请在典礼开始前进行，不要在放映途中做。</p>
+  </div>
+  <div class="row"><button id="plCancel">取消</button><button id="plStart" style="background:var(--standby);border-color:var(--standby);color:#1a1200;font-weight:700">开始预加载</button></div>
+</dialog>
+
+<div id="plOverlay" class="ov-wrap" style="display:none">
+  <div class="ov-card">
+    <div class="ov-title"><span class="spin big"></span> <span id="ovTitle">正在预加载</span></div>
+    <div class="ov-warn" id="ovWarn">请不要操作控制台和 PowerPoint，完成后会自动解除</div>
+    <div class="ov-phase" id="ovPhase">第 1 / 2 步：打开 PPT</div>
+    <div class="ov-bar"><i id="ovBar"></i></div>
+    <div class="ov-nums num"><span id="ovCount">0 / 0</span><span id="ovPct">0%</span></div>
+    <div class="ov-cur" id="ovCur">&nbsp;</div>
+    <div class="ov-time num" id="ovTime">&nbsp;</div>
+    <div class="ov-sum" id="ovSum" style="display:none"></div>
+    <div class="row"><button id="ovCancel">取消预加载</button><button id="ovOk" style="display:none;background:var(--go);border-color:var(--go);color:#03140a;font-weight:700">好的</button></div>
+  </div>
+</div>
 
 <dialog id="dlgSettings">
   <h3>设置</h3>
@@ -451,12 +500,70 @@ $("#bWhite").onclick = ()=>nav("white");
 $("#bEnd").onclick = ()=>nav("end");
 $("#bGo").onclick = go;
 $("#bStopMedia").onclick = async ()=>{ try{ await api("/api/media/stop",{}); poll(); }catch(e){ toast(e.message); } };
-$("#bPreload").onclick = async ()=>{ try{ await api("/api/preload",{}); toast("开始在后台加载所有 PPT…",1); poll(); }catch(e){ toast(e.message); } };
+$("#bPreload").onclick = ()=>{
+  if(S.status?.live?.id) return toast("正在放映中，请先结束放映再预加载（预加载会让放映变卡）");
+  const ppts = S.items.filter(i=>i.type==="ppt");
+  $("#plDecks").textContent = ppts.length;
+  $("#plSize").textContent = fmtSize(ppts.reduce((a,i)=>a+i.size,0));
+  $("#dlgPreload").showModal();
+};
+$("#plCancel").onclick = ()=>$("#dlgPreload").close();
+$("#plStart").onclick = async ()=>{
+  $("#dlgPreload").close();
+  try{ await api("/api/preload", {action:"start"}); S.plShown = true; }catch(e){ toast(e.message); }
+};
+$("#ovCancel").onclick = async ()=>{
+  $("#ovCancel").disabled = true; $("#ovCancel").textContent = "正在取消…";
+  try{ await api("/api/preload", {action:"cancel"}); }catch(e){ toast(e.message); }
+};
+$("#ovOk").onclick = ()=>{ S.plAck = S.status?.preload?.finished_at; $("#plOverlay").style.display = "none"; };
+const fmtDur = sec => { sec = Math.max(0, Math.round(sec)); return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`; };
+function renderPreload(pl){
+  const ov = $("#plOverlay");
+  if(pl.running){
+    S.plShown = true;
+    ov.style.display = "";
+    $("#ovTitle").textContent = pl.cancel ? "正在取消预加载…" : "正在预加载";
+    $("#ovWarn").style.display = ""; $("#ovSum").style.display = "none";
+    $("#ovCancel").style.display = ""; $("#ovOk").style.display = "none";
+    if(!pl.cancel){ $("#ovCancel").disabled = false; $("#ovCancel").textContent = "取消预加载"; }
+    $("#ovPhase").textContent = `第 ${pl.phase} / 2 步：${pl.phase_name}`;
+    const pct = pl.total ? pl.done / pl.total * 100 : 0;
+    $("#ovBar").style.width = pct + "%";
+    $("#ovCount").textContent = `${pl.done} / ${pl.total}`;
+    $("#ovPct").textContent = Math.floor(pct) + "%";
+    $("#ovCur").textContent = pl.current ? `${pl.current} · ${pl.detail}` : "\u00a0";
+    const used = Date.now()/1000 - pl.started;
+    const eta = pl.phase === 2 && pl.done > 3 ? used / pl.done * (pl.total - pl.done) : null;
+    $("#ovTime").textContent = `已用 ${fmtDur(used)}` + (eta !== null ? ` · 第 2 步预计还要 ${fmtDur(eta)}` : "") +
+      (pl.errors.length ? ` · ${pl.errors.length} 个问题` : "");
+  }else if(pl.finished_at && S.plShown && S.plAck !== pl.finished_at){
+    // 显示结果，等用户按“好的”
+    ov.style.display = "";
+    $("#ovTitle").textContent = pl.summary.startsWith("已取消") ? "预加载已取消" : "预加载完成 ✓";
+    document.querySelector("#plOverlay .spin").style.display = "none";
+    $("#ovWarn").style.display = "none";
+    $("#ovBar").style.width = (pl.total ? pl.done / pl.total * 100 : 100) + "%";
+    $("#ovCount").textContent = `${pl.done} / ${pl.total}`;
+    $("#ovPct").textContent = (pl.total ? Math.floor(pl.done / pl.total * 100) : 100) + "%";
+    $("#ovSum").style.display = "";
+    $("#ovSum").innerHTML = esc(pl.summary) + (pl.font_warnings?.length
+      ? `<div class="fontwarn"><b>⚠ 这些字体没安装、也没内嵌在 PPT 里，放映时会被替换成别的字体：</b><ul>` +
+        pl.font_warnings.map(w=>`<li>${esc(w.name)}：<b>${w.fonts.map(esc).join("、")}</b></li>`).join("") +
+        `</ul>请在这台电脑上安装这些字体，或在 PowerPoint 里“另存为 → 工具 → 保存选项 → 将字体嵌入文件”。</div>` : "");
+    $("#ovCur").textContent = "\u00a0"; $("#ovTime").textContent = "\u00a0";
+    $("#ovCancel").style.display = "none"; $("#ovOk").style.display = "";
+  }else{
+    ov.style.display = "none";
+  }
+  if(pl.running) document.querySelector("#plOverlay .spin").style.display = "";
+}
 $("#bRefresh").onclick = ()=>{ S.decks = {}; loadItems(true); };
 $("#cueToggle").onclick = ()=>$("#cues").classList.toggle("collapsed");
 
 document.addEventListener("keydown", e=>{
   if(e.target.matches("input,textarea") || document.querySelector("dialog[open]")) return;
+  if($("#plOverlay").style.display !== "none"){ e.preventDefault(); return; }   // 预加载中：禁止操作
   const k = e.key;
   const map = {ArrowRight:"next"," ":"next",PageDown:"next",ArrowLeft:"prev",PageUp:"prev",Home:"first",End:"last",b:"black",B:"black",".":"black",w:"white",W:"white",",":"white",Escape:"end"};
   if(map[k]){ e.preventDefault(); nav(map[k]); return; }
@@ -493,9 +600,9 @@ function renderStatus(){
   }
   // 预加载
   const pl = st.preload;
-  $("#prog").style.display = pl.running ? "" : "none";
-  if(pl.running){ $("#prog i").style.width = (pl.total ? pl.done/pl.total*100 : 0)+"%"; $("#bPreload").textContent = `加载中 ${pl.done}/${pl.total}`; $("#bPreload").disabled = true; }
-  else { $("#bPreload").textContent = "预加载全部"; $("#bPreload").disabled = false; }
+  $("#prog").style.display = "none";
+  $("#bPreload").disabled = !!pl.running;
+  renderPreload(pl);
   // 视频
   $("#media").classList.toggle("show", !!st.media?.playing);
   $("#mediaName").textContent = st.media?.name || "";
@@ -523,7 +630,9 @@ function renderStatus(){
     setImg($("#imgNext"), $("#phNext"), nx && nx<=L.count && ok(nx) ? thumb(L.id, nx) : null, nx && nx<=L.count ? `第 ${nx} 页` : "（最后一页）");
     // 让浏览器先把接下来几页的图下载好，翻页时直接显示
     for(const n of ready){ const k = L.id+"/"+n; if(!S.seen.has(k)){ S.seen.add(k); const im = new Image(); im.src = thumb(L.id, n); } }
-    $("#notes").textContent = L.notes_off ? "（这份 PPT 读取备注太慢，已停用备注显示，不影响放映）" : (L.notes || "");
+    $("#notes").textContent = L.notes_off ? "（这份 PPT 读取备注太慢，已停用备注显示，不影响放映）"
+      : L.notes ? L.notes
+      : L.notes_missing ? "（这一页的备注还没读取。放映中不读取，以免打断动画——请先预加载）" : "";
   }else{
     $("#liveDeck").textContent = "—"; $("#liveCnt").innerHTML = `– <span>/ –</span>`; $("#liveState").textContent = "未放映";
     setImg($("#imgLive"), $("#phLive"), null, `目前没有放映<br><small>在左边点 ▶ 开始，或设好待命后按 GO</small>`);

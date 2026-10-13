@@ -1,0 +1,6 @@
+# 代码风格检查：pip install ruff 后运行  ruff check .
+line-length = 120
+target-version = "py39"
+
+[lint]
+select = ["E", "F", "W", "B", "I"]
