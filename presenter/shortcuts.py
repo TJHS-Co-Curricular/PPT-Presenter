@@ -19,6 +19,8 @@ def on_hotkey(action):
     try:
         if action == "go":
             show.go("快捷键：")
+        elif action in show.BASE_SLIDES:
+            show.show_base(action)
         else:
             show.nav(action)      # 翻页、黑屏直接在后台执行，最快，也不依赖界面
     except Exception as e:

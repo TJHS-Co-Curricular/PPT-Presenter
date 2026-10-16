@@ -48,9 +48,17 @@ def default_folder():
     return paths.BASE
 
 
+#: v2.1 起“黑屏 / 白屏”按钮换成“礼成 / 大会背景”，快捷键跟着搬过去
+_RENAMED_ACTIONS = {"black": "finale", "white": "background"}
+
+
 def _migrate_hotkeys(saved):
+    saved = dict(saved or {})
+    for old, new in _RENAMED_ACTIONS.items():
+        if old in saved and new not in saved and saved[old]:
+            saved[new] = saved[old]
     hotkeys = dict(DEFAULT_HOTKEYS)
-    hotkeys.update({k: v for k, v in (saved or {}).items() if k in ACTIONS})
+    hotkeys.update({k: v for k, v in saved.items() if k in ACTIONS})
     # 旧版默认把 GO 设在 F12，但 F12 被 Windows 保留，不能当全局快捷键
     for action, combo in hotkeys.items():
         if str(combo).strip().upper() == "F12":

@@ -107,8 +107,16 @@ footer{display:flex;align-items:stretch;gap:10px;padding:10px 14px calc(10px + e
 footer .grp{display:flex;gap:8px}
 footer button{padding:12px 16px;font-size:15px;font-weight:600}
 #bNext{min-width:150px;background:#20324f;border-color:#35558a}
-#bBlack.on{background:#000;border-color:#888}
-#bWhite.on{background:#eee;color:#111}
+#bBg.on,#bFinale.on{background:var(--accent-bg);border-color:var(--accent);color:#cfe0ff}
+.closecur{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-width:150px;max-width:240px;
+  border-color:rgba(255,59,59,.45);background:rgba(255,59,59,.08);padding:6px 12px!important}
+.closecur:not(:disabled):hover{background:rgba(255,59,59,.16);border-color:var(--live)}
+.closecur .lab{font-size:11px;font-weight:800;letter-spacing:1px;color:#ff8a8a}
+.closecur .nm{font-size:13px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge.base{background:var(--accent-bg);color:#cfe0ff;border:1px solid rgba(76,141,255,.5)}
+.cue .t small{flex-wrap:wrap;row-gap:3px}
+.cue .t small > *{white-space:nowrap}
+.badge{white-space:nowrap}
 .sp{flex:1}
 .go{display:flex;align-items:center;gap:10px;border:1px solid var(--standby);background:var(--standby-bg);border-radius:10px;padding:4px 4px 4px 12px;min-width:0}
 .go .lab{font-size:11px;color:var(--standby);letter-spacing:1px;font-weight:800}
@@ -164,6 +172,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
 
 #cueToggle{display:none}
 @media (max-width:900px){
+  .closecur{max-width:none;width:100%}
   body{overflow:auto;height:auto;min-height:100dvh}
   main{grid-template-columns:1fr}
   #cues{border-right:0;border-bottom:1px solid var(--line);max-height:40vh}
@@ -247,11 +256,14 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
     <button id="bNext">下一页 ▶<kbd>→</kbd></button>
   </div>
   <div class="grp">
-    <button id="bBlack">黑屏<kbd>B</kbd></button>
-    <button id="bWhite">白屏<kbd>W</kbd></button>
+    <button id="bBg" title="0 号 PPT 的第 1 页（待命不变）">大会背景<kbd>W</kbd></button>
+    <button id="bFinale" title="0 号 PPT 的第 2 页（待命不变）">礼成<kbd>B</kbd></button>
     <button id="bEnd">结束放映<kbd>Esc</kbd></button>
   </div>
   <div class="sp"></div>
+  <button id="bCloseCur" class="closecur" disabled title="把这个环节的节目从 PowerPoint 里完全关掉，释放内存（编号 0 的大会背景不能关）">
+    <span class="lab">⏏ 完全关闭</span><span class="nm" id="ccName">—</span>
+  </button>
   <div class="go">
     <div><div class="lab">待命 STANDBY <span id="goAuto" style="display:none" title="PPT 放到结尾时会自动开始这个节目（可在设置里关掉）">· 播完自动接</span></div><div class="nm" id="sbName">—</div></div>
     <button id="bGo" title="开始待命的节目，并自动把下一个节目设为待命">GO<kbd style="color:#03140a;border-color:#0a5">Enter</kbd></button>
@@ -302,7 +314,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
 
   <div class="help">
     控制台窗口内的按键：→ / 空格 / PageDown 下一页 · ← / PageUp 上一页 · Home 第一页 · End 最后一页<br>
-    B 黑屏 · W 白屏 · Esc 结束放映 · Enter = GO · S 把选中的设为待命 · ↑↓ 在节目单中移动选择<br>
+    W 大会背景 · B 礼成（0 号 PPT 第 1 / 2 页）· Esc 结束放映 · Enter = GO · S 把选中的设为待命 · ↑↓ 在节目单中移动选择<br>
     节目单：单击 = 查看页面 · 双击或 ▶ = 立刻放映 · ★ = 设为待命<br>
     其他设置（启动时预加载、缩略图大小）在程序旁边的 config.json 里。
   </div>
@@ -356,7 +368,8 @@ function renderCues(){
     if(g !== lastGroup){ if(lastGroup!==null || g!=="节目") html += `<div class="group">${g}</div>`; lastGroup = g; }
     const cls = ["cue"]; if(it.id===S.sel) cls.push("sel"); if(it.id===S.standby) cls.push("standby"); if(it.id===liveId) cls.push("live");
     const live = it.id===liveId || (it.type!=="ppt" && st.media?.playing && st.media.name===it.name);
-    const badge = live ? `<span class="badge l">LIVE</span>` : it.id===S.standby ? `<span class="badge s">待命</span>` : "";
+    const badge = (live ? `<span class="badge l">LIVE</span>` : it.id===S.standby ? `<span class="badge s">待命</span>` : "")
+      + (it.type==="ppt" && it.num==="0" ? ` <span class="badge base" title="大会背景（第 1 页）/ 礼成（第 2 页），不能关闭">🔒 大会背景</span>` : "");
     const ld = it.type==="ppt" ? (S.opening.has(it.id) ? `<span class="spin"></span> 打开中` : loaded.has(it.id) ? `<span class="loaded">● 已加载</span>` : "") : "";
     html += `<div class="${cls.join(" ")}" data-id="${it.id}">
       <div class="n num">${esc(it.num||"·")}</div>
@@ -400,7 +413,7 @@ async function selectItem(id){
   S.sel = id; renderCues();
   const it = byId(id);
   $("#bStartSel").style.display = "";
-  $("#bCloseSel").style.display = it.type==="ppt" ? "" : "none";
+  $("#bCloseSel").style.display = it.type==="ppt" && !(it.num === "0") ? "" : "none";
   $("#bStartSel").textContent = it.type==="ppt" ? "▶ 从第 1 页放映" : "▶ 播放";
   if(it.type !== "ppt"){
     $("#stripTitle").innerHTML = `${esc(it.title)}<small>${TYPE[it.type]} · ${fmtSize(it.size)}</small>`;
@@ -495,8 +508,20 @@ async function nav(action, slide){
 
 $("#bPrev").onclick = ()=>nav("prev");
 $("#bNext").onclick = ()=>nav("next");
-$("#bBlack").onclick = ()=>nav("black");
-$("#bWhite").onclick = ()=>nav("white");
+async function showBase(action){
+  try{ await api("/api/base", {action}); }catch(e){ toast(e.message); }
+}
+$("#bBg").onclick = ()=>showBase("background");
+$("#bFinale").onclick = ()=>showBase("finale");
+$("#bCloseCur").onclick = async ()=>{
+  const cc = S.status?.closable; if(!cc) return;
+  $("#bCloseCur").disabled = true;
+  try{
+    await api("/api/close_current", {});
+    delete S.decks[cc.id];
+    toast(`已完全关闭：${cc.num ? cc.num + " " : ""}${cc.title}`, 1);
+  }catch(e){ toast(e.message); }
+};
 $("#bEnd").onclick = ()=>nav("end");
 $("#bGo").onclick = go;
 $("#bStopMedia").onclick = async ()=>{ try{ await api("/api/media/stop",{}); poll(); }catch(e){ toast(e.message); } };
@@ -565,9 +590,11 @@ document.addEventListener("keydown", e=>{
   if(e.target.matches("input,textarea") || document.querySelector("dialog[open]")) return;
   if($("#plOverlay").style.display !== "none"){ e.preventDefault(); return; }   // 预加载中：禁止操作
   const k = e.key;
-  const map = {ArrowRight:"next"," ":"next",PageDown:"next",ArrowLeft:"prev",PageUp:"prev",Home:"first",End:"last",b:"black",B:"black",".":"black",w:"white",W:"white",",":"white",Escape:"end"};
+  const map = {ArrowRight:"next"," ":"next",PageDown:"next",ArrowLeft:"prev",PageUp:"prev",Home:"first",End:"last",Escape:"end"};
   if(map[k]){ e.preventDefault(); nav(map[k]); return; }
   if(k==="Enter"){ e.preventDefault(); go(); return; }
+  if(k==="w"||k==="W"){ e.preventDefault(); showBase("background"); return; }
+  if(k==="b"||k==="B"){ e.preventDefault(); showBase("finale"); return; }
   if(k==="s"||k==="S"){ if(S.sel){ setStandby(S.sel); renderCues(); } return; }
   if(k==="ArrowDown"||k==="ArrowUp"){
     e.preventDefault();
@@ -613,9 +640,15 @@ function renderStatus(){
   mon.classList.toggle("white", L?.state===4);
   mon.classList.toggle("done", L?.state===5);
   $("#ovLive").textContent = L?.state===3 ? "黑 屏" : L?.state===4 ? "白 屏" : L?.state===5 ? "放映结尾" : "";
-  $("#bBlack").classList.toggle("on", L?.state===3);
-  $("#bWhite").classList.toggle("on", L?.state===4);
-  ["#bPrev","#bNext","#bBlack","#bWhite","#bEnd"].forEach(s=>$(s).disabled = !L);
+  const onBase = !!L && !!st.base && L.id === st.base;
+  $("#bBg").classList.toggle("on", onBase && L.slide === 1);
+  $("#bFinale").classList.toggle("on", onBase && L.slide === 2);
+  ["#bBg","#bFinale"].forEach(s=>{ $(s).disabled = !st.base; });
+  if(!st.base){ $("#bBg").title = $("#bFinale").title = "节目单里没有编号为 0 的 PPT"; }
+  ["#bPrev","#bNext","#bEnd"].forEach(s=>$(s).disabled = !L);
+  const cc = st.closable;
+  $("#bCloseCur").disabled = !cc;
+  $("#ccName").textContent = cc ? `${cc.num ? cc.num + " " : ""}${cc.title}` : "—";
   const it = L ? byId(L.id) : null;
   if(L){
     $("#liveDeck").textContent = it ? `${it.num?it.num+" ":""}${it.title}` : "（不在节目单里的 PPT）";

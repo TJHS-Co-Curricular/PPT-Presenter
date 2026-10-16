@@ -15,8 +15,8 @@ ACTIONS = {
     "go": "GO（开始待命节目）",
     "next": "下一页",
     "prev": "上一页",
-    "black": "黑屏 / 恢复",
-    "white": "白屏 / 恢复",
+    "background": "大会背景（0 号 PPT 第 1 页）",
+    "finale": "礼成（0 号 PPT 第 2 页）",
     "end": "结束放映",
     "show": "把控制台窗口叫到最前面",
 }
@@ -25,8 +25,8 @@ DEFAULT_HOTKEYS = {
     "go": "F8",
     "next": "F10",
     "prev": "F9",
-    "black": "F11",
-    "white": "",
+    "background": "F7",
+    "finale": "F11",
     "end": "",
     "show": "Ctrl+Alt+P",
 }

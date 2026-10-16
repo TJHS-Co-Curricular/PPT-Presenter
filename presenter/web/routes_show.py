@@ -49,6 +49,31 @@ def api_close():
     return guarded(run)
 
 
+@bp.route("/api/base", methods=["POST"])
+def api_base():
+    """大会背景 / 礼成：{"action": "background" | "finale"}。"""
+    action = body().get("action")
+
+    def run():
+        if action not in show.BASE_SLIDES:
+            raise ValueError("未知操作：%s" % action)
+        show.show_base(action)
+        return ok()
+
+    return guarded(run)
+
+
+@bp.route("/api/close_current", methods=["POST"])
+def api_close_current():
+    """完全关闭刚播完 / 正在播的节目（编号 0 除外）。"""
+
+    def run():
+        show.close_current()
+        return ok()
+
+    return guarded(run)
+
+
 @bp.route("/api/media/stop", methods=["POST"])
 def api_media_stop():
     MEDIA.stop()

@@ -12,10 +12,11 @@ import json
 import os
 import time
 
+from presenter import show
 from presenter.cache import thumb_path
 from presenter.config import CFG
 from presenter.core import MOCK, WORKER
-from presenter.library import ITEMS, ITEMS_LOCK, norm
+from presenter.library import ITEMS, ITEMS_LOCK, base_item, norm
 from presenter.media import MEDIA
 from presenter.preload import PRELOAD
 
@@ -40,6 +41,10 @@ def build_status():
     st["media"] = MEDIA.status()
     st["mock"] = MOCK
     st["standby"] = CFG.get("standby") or ""
+    base = base_item()
+    st["base"] = base["id"] if base else ""
+    closable = show.closable_item(WORKER.snapshot)
+    st["closable"] = {k: closable[k] for k in ("id", "num", "title", "type")} if closable else None
     st["auto_advance"] = bool(CFG.get("auto_advance", True))
     if not st.get("error"):
         st.pop("error", None)

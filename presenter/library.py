@@ -87,6 +87,16 @@ def refresh_items():
     return lst
 
 
+def is_base(item):
+    """编号为 0 的 PPT = 大会背景：第 1 页是大会背景、第 2 页是礼成；不能关闭。"""
+    return bool(item) and item["type"] == "ppt" and item["num"] == "0"
+
+
+def base_item():
+    """节目单里编号为 0 的 PPT；没有就返回 None。"""
+    return next((it for it in ordered_items() if is_base(it)), None)
+
+
 def get_item(iid):
     with ITEMS_LOCK:
         it = ITEMS.get(iid)

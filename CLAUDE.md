@@ -6,6 +6,24 @@
 Windows 桌面程序：在一个窗口里集中控制多份 PowerPoint 和视频，用于典礼、晚会按节目单逐个播放。
 纯本机运行（只监听 127.0.0.1），用 PyInstaller 打包成单个 exe。界面文字、代码注释、日志一律用**简体中文**。
 
+- 当前版本：看 `CHANGELOG.md` 最上面的标题（写这份文件时是 v2.1）。
+- 交接 / 待办 / 已知问题：看 `HANDOFF.md`（2026-10-16 从 Claude 应用转到 Claude Code 时写的一次性文档，处理完可以删掉）。
+- 和用户沟通一律用简体中文，用词浅白。
+
+## 技术栈与版本
+| 项目 | 版本 / 说明 |
+|---|---|
+| 系统 | Windows（PowerPoint COM、Win32 API、WebView2）；其他系统只能跑演示模式 |
+| Python | 开发机 `.venv` 是 3.13.15；`ruff.toml` 的 `target-version` 是 py39 |
+| 网页服务 | Flask 3.1、waitress 3.0（8 线程） |
+| PowerPoint 控制 | pywin32 312（`win32com.client` 动态调度） |
+| 桌面窗口 | pywebview 6.2（Edge WebView2 / WinForms，依赖 pythonnet 3.2） |
+| 打包 | PyInstaller 6.22（`--onefile --windowed`，`build.bat` 自动安装） |
+| 视频 | VLC（有装就全屏播放）；没装就用系统默认播放器 |
+| 代码检查 | ruff（**没装在 `.venv` 里**，要先 `pip install ruff`） |
+| 依赖清单 | `requirements.txt`：flask、waitress、pywebview（只限 Windows）、pywin32（只限 Windows） |
+| 没有记录 | PowerPoint（Office）版本、VLC 版本 |
+
 ## 目录结构
 ```
 server.py                  入口：调试窗口模式 / 接管日志 / 调用 presenter.app.run()
@@ -28,7 +46,7 @@ presenter/                 后端（按功能分模块，依赖只从下往上�
   fonts.py                 字体检查：没安装也没内嵌的字体（注册表 + GDI）
   media.py                 视频播放（VLC / 系统播放器）
   preload.py               完整预加载、ensure_not_preloading()
-  show.py                  待命 / 开始 / GO / 翻页 / 关闭、播完自动接续（状态钩子）
+  show.py                  待命 / 开始 / GO / 翻页 / 关闭、大会背景 / 礼成、完全关闭、播完自动接续（状态钩子）
   background.py            空闲任务：预取缩略图和备注、标记已保存、写备注缓存
   status.py                拼给界面的完整状态、长轮询 wait_for_change
   shortcuts.py             全局快捷键按下后做什么、HOTKEYS 实例
@@ -36,7 +54,7 @@ presenter/                 后端（按功能分模块，依赖只从下往上�
     __init__.py            create_app()，注册三组路由、404 处理
     common.py              body() / ok() / err() / guarded()
     routes_library.py      /  /static  /api/items  /api/deck  /api/thumb
-    routes_show.py         /api/start  /api/go  /api/standby  /api/nav  /api/close  /api/media/stop
+    routes_show.py         /api/start  /api/go  /api/standby  /api/nav  /api/base  /api/close  /api/close_current  /api/media/stop
     routes_system.py       /api/status  /api/preload  /api/config  /api/hotkeys/suspend  /api/debug  /api/window
   app.py                   setup()（测试也用）/ run()（完整启动）
   desktop/                 Windows 桌面功能（非 Windows 自动跳过）
@@ -51,6 +69,11 @@ CHANGELOG.md               更新记录，最上面的版本号就是程序版�
 ruff.toml                  代码风格检查设置
 ```
 运行时生成在 exe（或 server.py）旁边：`config.json`、`.cache/`（thumbs、notes、webview）、`ppt-presenter.log`。
+
+不进仓库（见 `.gitignore`）：`.venv/`、`build/`、`dist/`、`config.json`、`.cache/`、日志、所有 PPT / 视频 / 音频素材（`PPT/`、`Example/`）。
+`dist/` 里放着打包好的 exe、测试用的 `PPT/` 文件夹、那台电脑的 `config.json` 和 `ppt-presenter.log`。排查实机问题时先看这个日志。
+
+**遗留文件**：根目录的 `desktop.py`、`version.py` 是 v1.9 拆包之前的旧版本，现在没有任何代码导入它们，不要改它们，也不要以为它们是在用的代码（要不要删见 `HANDOFF.md`）。根目录的 `config.json` 是 v1.x 的旧开发设置，程序读取时会自动删掉过时的键。
 
 ## 想改什么，去哪里
 | 想做的事 | 改哪里 |
@@ -76,7 +99,8 @@ auto-advance  播完自动接续（由状态钩子另开线程）
 调试窗口      独立子进程（exe --debug-console <日志> <pid>）
 ```
 
-## 必须遵守的规则（都是踩过的坑）
+## 必须遵守的规则 / 不能改动的部分（都是踩过的坑）
+下面每一条都是出过问题才定下来的。要改其中任何一条，先问用户。
 1. **所有 PowerPoint COM 调用只能在 ComWorker 线程里做**：通过 `WORKER.call(fn, ..., priority=, label=)`。
    **绝不能在 ComWorker 线程里调用 `WORKER.call`**（自己等自己 = 死锁）。`change_hooks` 和 `idle_jobs` 都在这个线程里运行，需要触发操作时另开线程（参考 `show.auto_advance`）。
 2. **PowerPoint 忙碌 ≠ 关闭**（`powerpoint/com_errors.py`）：`RPC_E_CALL_REJECTED` / `RETRYLATER`，以及动态调度下的 `AttributeError: PowerPoint.Application.xxx` 都是“忙”，由 worker 等待重试（最多 30 秒）。只有 `HR_DEAD` 才 `reset()` 重连。当前 pywin32 **没有** `pythoncom.IID_IMessageFilter`，不要再尝试注册 COM 消息过滤器。
@@ -92,6 +116,10 @@ auto-advance  播完自动接续（由状态钩子另开线程）
 9. **入口必须最先 `setup_logging()`**：打包是无控制台模式，`sys.stdout` 为 None。`presenter.config` 在导入时就会读配置（可能打印），所以 `server.py` 先接管日志、再导入 `presenter.app`。
 10. 窗口标题必须保持 `PPT 控制台`（`desktop.common.APP_TITLE`），找窗口和单实例都靠它。
 11. `import presenter` 不能有副作用；共享实例集中在 `core.py`；`WORKER` 只在 `app.setup()` 里启动。
+12. **编号 0 的 PPT 是大会背景**（`library.is_base` / `base_item`）：第 1 页 = 大会背景，第 2 页 = 礼成（`show.BASE_SLIDES`、`show.show_base`，不改待命）。它**永远不能关闭**：任何关闭入口都要走 `show.close_item()`（里面有检查），界面也要隐藏 / 停用关闭按钮。
+13. **只监听 127.0.0.1**：v1.4 起移除了局域网 / 手机遥控和 PIN，不要再开放到外网。
+14. **`CHANGELOG.md` 最上面的标题格式不能改**（`## [X.Y] - YYYY-MM-DD`）：`presenter/version.py` 用正则读它，`build.bat` 靠它给 exe 命名，读不到就打包失败。
+15. **改快捷键 / 设置的键名要做迁移**：旧的 config.json 会留在使用者电脑上，参考 `config._migrate_hotkeys()`（例如 v2.1 把 `black` / `white` 搬到 `finale` / `background`）。
 
 ## 代码风格
 - `ruff check .`（设置见 `ruff.toml`：120 字符一行，E / F / W / B / I 规则）必须通过。
@@ -101,12 +129,25 @@ auto-advance  播完自动接续（由状态钩子另开线程）
 - 有意的 COM“探测”写成 `_ = obj.Property  # 探测：…`。
 
 ## 开发与测试
-- Windows：`start.bat`（Python 直接运行，日志同时输出到命令行）。
+常用命令（在仓库根目录，Windows）：
+```bat
+start.bat                                  :: 开发运行：自动建 .venv、装依赖、运行 server.py（日志同时输出到命令行）
+.venv\Scripts\python.exe server.py --debug :: 同时打开调试窗口
+.venv\Scripts\python.exe -m presenter.version  :: 打印版本号（build.bat 也用它）
+.venv\Scripts\python.exe -m pip install ruff
+.venv\Scripts\python.exe -m ruff check .   :: 代码风格检查，必须通过
+build.bat                                  :: 打包成 dist\PPT-Presenter-VX.Y.exe
+```
 - 非 Windows：`python server.py` 进入**演示模式**（MockController，没有 PowerPoint、窗口、快捷键），用浏览器打开日志里的地址。
 - 脚本测试：`from presenter import app; app.setup()`，再用 `app.serve_forever(port)` 起服务，可以调用 `shortcuts.on_hotkey("go")`、`show.go()` 等（不要调用 `app.run()`，它会开窗口）。
-- 改完至少检查：节目单排序、GO / 待命 / 自动接续、跳页、黑屏、预加载（锁定、取消、完成）、设置对话框（快捷键录制、F12 拒绝）、窄屏布局。
+- **仓库里没有自动测试**，目前全靠手动检查。
+- 改完至少检查：节目单排序、GO / 待命 / 自动接续、跳页、大会背景 / 礼成、完全关闭（编号 0 要拒绝）、预加载（锁定、取消、完成）、设置对话框（快捷键录制、F12 拒绝）、窄屏布局。
+- 动画、Morph、字体对不对只能在 Windows + PowerPoint 上用眼睛看，演示模式看不出来。
 
 ## 版本与发布
 1. 每次修改都在 `CHANGELOG.md` **最上面**加新版本：`## [X.Y] - YYYY-MM-DD`，分“新增 / 改进 / 修复 / 移除”写清楚原因和做法。
 2. 运行 `build.bat`，生成 `dist\PPT-Presenter-VX.Y.exe`（版本号来自 CHANGELOG，界面右上角也会显示）。
 3. `presenter` 包会整个打进 exe（`--collect-submodules presenter`）；新增数据文件要在 `build.bat` 加 `--add-data`。
+4. 部署：把 exe 拷进放 PPT 的文件夹，双击运行；`config.json`、`.cache/`、日志会生成在 exe 旁边。换电脑或改过 PPT 后先预加载一次。
+5. 只改说明文件（README、CLAUDE.md、HANDOFF.md）不用加版本、不用重新打包；改了 `presenter/`、`static/`、`server.py`、`build.bat` 就要加版本并重新打包。
+6. 同步说明：改了功能或快捷键，要一起更新 `README.md`（给使用者看）和本文件。
