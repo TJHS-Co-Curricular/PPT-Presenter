@@ -763,11 +763,7 @@ $("#setSave").onclick = async ()=>{
   }catch(e){ toast(e.message); }
 };
 
-/* ---------- 全局快捷键（由程序调用）/ 窗口置顶 ---------- */
-window.hotkey = act => {
-  if(act === "go") return go();
-  nav(act);
-};
+/* ---------- 窗口置顶（全局快捷键直接在后台执行，不经过界面） ---------- */
 async function initDesktop(){
   // 只有在程序窗口里（不是浏览器）才显示置顶按钮
   let j; try{ j = await api("/api/window"); }catch(e){ return; }

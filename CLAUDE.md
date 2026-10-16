@@ -14,15 +14,15 @@ Windows 桌面程序：在一个窗口里集中控制多份 PowerPoint 和视频
 | 项目 | 版本 / 说明 |
 |---|---|
 | 系统 | Windows（PowerPoint COM、Win32 API、WebView2）；其他系统只能跑演示模式 |
-| Python | 开发机 `.venv` 是 3.13.15；`ruff.toml` 的 `target-version` 是 py39 |
+| Python | 开发机 `.venv` 是 3.15.0（2026-10-16 重建）；`ruff.toml` 的 `target-version` 是 py39 |
 | 网页服务 | Flask 3.1、waitress 3.0（8 线程） |
 | PowerPoint 控制 | pywin32 312（`win32com.client` 动态调度） |
 | 桌面窗口 | pywebview 6.2（Edge WebView2 / WinForms，依赖 pythonnet 3.2） |
 | 打包 | PyInstaller 6.22（`--onefile --windowed`，`build.bat` 自动安装） |
 | 视频 | VLC（有装就全屏播放）；没装就用系统默认播放器 |
-| 代码检查 | ruff（**没装在 `.venv` 里**，要先 `pip install ruff`） |
+| 代码检查 | ruff 0.17（2026-10-16 起已装在 `.venv` 里） |
 | 依赖清单 | `requirements.txt`：flask、waitress、pywebview（只限 Windows）、pywin32（只限 Windows） |
-| 没有记录 | PowerPoint（Office）版本、VLC 版本 |
+| 开发机 | Microsoft 365（PowerPoint 16.0.20326）、WebView2 155；**没装 VLC**（典礼那台电脑有没有装未确认） |
 
 ## 目录结构
 ```
@@ -112,11 +112,12 @@ auto-advance  播完自动接续（由状态钩子另开线程）
 5. **PPT 一律只读、带窗口打开再最小化**（`controller._open()`：`Presentations.Open(path, True, False, True)` + `WindowState = 最小化`）。**不要改回无窗口**（WithWindow=False）：那样 PowerPoint 不载入内嵌字体，Morph 等效果也可能不正常。并且**随时标记为已保存**（`_mark_saved`：打开后、导出缩略图后、每 3 秒、关闭前、退出前），否则 PowerPoint 会弹出模态的 “Save your changes to this file?”，让所有 COM 调用卡住。
 6. **缩略图渲染方式变了要提高 `cache.THUMB_RENDER`**，让旧缓存自动作废。
 7. **预加载期间禁止操作**：`show.py` 里所有会操作 PowerPoint 的函数都先调用 `ensure_not_preloading()`；全局快捷键（除 `show`）直接忽略；空闲预取暂停。新增入口时也要加。
-8. **全局快捷键**：F12 被 Windows 保留给调试器，无法注册（`parse_hotkey` 会拒绝）。默认 F8=GO、F9 上一页、F10 下一页、F11 黑屏、Ctrl+Alt+P 叫出窗口。翻页笔常用的 PageUp / PageDown / B / Esc 不要设成全局快捷键。
+8. **全局快捷键**：F12 被 Windows 保留给调试器，无法注册（`parse_hotkey` 会拒绝）。v2.2 起**默认全部未设定**（`DEFAULT_HOTKEYS` 全是空字符串，用户要求：防止和其他程序抢按键），不要再加回默认键；旧 config.json 里已有的键会保留。翻页笔常用的 PageUp / PageDown / B / Esc 不要设成全局快捷键。
 9. **入口必须最先 `setup_logging()`**：打包是无控制台模式，`sys.stdout` 为 None。`presenter.config` 在导入时就会读配置（可能打印），所以 `server.py` 先接管日志、再导入 `presenter.app`。
 10. 窗口标题必须保持 `PPT 控制台`（`desktop.common.APP_TITLE`），找窗口和单实例都靠它。
 11. `import presenter` 不能有副作用；共享实例集中在 `core.py`；`WORKER` 只在 `app.setup()` 里启动。
 12. **编号 0 的 PPT 是大会背景**（`library.is_base` / `base_item`）：第 1 页 = 大会背景，第 2 页 = 礼成（`show.BASE_SLIDES`、`show.show_base`，不改待命）。它**永远不能关闭**：任何关闭入口都要走 `show.close_item()`（里面有检查），界面也要隐藏 / 停用关闭按钮。
+    它也**永远不触发自动接续**：放到结尾黑屏时跳回最后一页（`show._stay_on_base`），不管 `auto_advance` 开没开。
 13. **只监听 127.0.0.1**：v1.4 起移除了局域网 / 手机遥控和 PIN，不要再开放到外网。
 14. **`CHANGELOG.md` 最上面的标题格式不能改**（`## [X.Y] - YYYY-MM-DD`）：`presenter/version.py` 用正则读它，`build.bat` 靠它给 exe 命名，读不到就打包失败。
 15. **改快捷键 / 设置的键名要做迁移**：旧的 config.json 会留在使用者电脑上，参考 `config._migrate_hotkeys()`（例如 v2.1 把 `black` / `white` 搬到 `finale` / `background`）。

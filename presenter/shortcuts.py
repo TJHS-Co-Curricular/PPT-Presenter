@@ -22,7 +22,7 @@ def on_hotkey(action):
         elif action in show.BASE_SLIDES:
             show.show_base(action)
         else:
-            show.nav(action)      # 翻页、黑屏直接在后台执行，最快，也不依赖界面
+            show.nav(action)      # 翻页、结束放映直接在后台执行，最快，也不依赖界面
     except Exception as e:
         log("快捷键", "%s：%s" % (ACTIONS.get(action, action), e))
 

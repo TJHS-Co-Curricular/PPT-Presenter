@@ -2,8 +2,9 @@
 """
 节目单：扫描文件夹里的 PPT / 视频 / 音频，按文件名开头的编号排序。
 
-排序规则：有短编号（0、5.4、10、5.1-5.3）的在前，按自然顺序；没有编号的放最后。
-2025 这类年份不算编号。
+排序规则：有短编号的在前，按编号大小排（0、1、1.1、1.2、2 … 5.1-5.3、5.4 … 10、11、12；
+范围按开头的编号算）；编号相同时按文件名；没有编号的放最后。
+2025 这类年份、20b9eb73 这类编号后面紧跟英文字母的，都不算编号。
 """
 import hashlib
 import os
@@ -13,7 +14,8 @@ import threading
 from presenter.config import CFG
 from presenter.formats import is_temp_file, kind_of
 
-_NUM_RE = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2})?(?:\s*-\s*\d{1,2}(?:\.\d{1,2})?)?)(?!\d)\s*[.、_\s-]?\s*(.+)$")
+_NUM_RE = re.compile(
+    r"^\s*(\d{1,2}(?:\.\d{1,2})?(?:\s*-\s*\d{1,2}(?:\.\d{1,2})?)?)(?![\dA-Za-z])\s*[.、_\s-]?\s*(.+)$")
 
 
 class ItemNotFound(LookupError):
@@ -33,8 +35,15 @@ def natural_key(s):
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)]
 
 
+def num_key(num):
+    """'5.1-5.3' → (5, 1)：按开头的编号比大小，所以 1 < 1.1 < 1.2 < 2。"""
+    return tuple(int(t) for t in re.findall(r"\d+", num.split("-")[0]))
+
+
 def sort_key(item):
-    return (0 if item["num"] else 1, natural_key(item["name"]))
+    if item["num"]:
+        return (0, num_key(item["num"]), natural_key(item["name"]))
+    return (1, (), natural_key(item["name"]))
 
 
 def _make_item(full, name, kind):

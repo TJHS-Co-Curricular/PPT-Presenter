@@ -2,8 +2,8 @@
 """
 全局快捷键：用 Windows 的 RegisterHotKey 注册，不管哪个程序在前台（包括 PowerPoint 放映中）按了都有效。
 
-注意：注册了的按键会被控制台“独占”，其他程序收不到，所以默认用 F8–F11 这类放映时用不到的键。
-F12 被 Windows 保留给调试器，任何程序都不能注册。
+注意：注册了的按键会被控制台“独占”，其他程序收不到，所以默认全部不设，由使用者在设置里选放映时用不到的键
+（例如 F8–F11）。F12 被 Windows 保留给调试器，任何程序都不能注册。
 """
 import threading
 import traceback
@@ -21,15 +21,8 @@ ACTIONS = {
     "show": "把控制台窗口叫到最前面",
 }
 
-DEFAULT_HOTKEYS = {
-    "go": "F8",
-    "next": "F10",
-    "prev": "F9",
-    "background": "F7",
-    "finale": "F11",
-    "end": "",
-    "show": "Ctrl+Alt+P",
-}
+#: v2.2 起默认全部“未设定”：避免和这台电脑上的其他程序抢按键，需要时在设置里自己录
+DEFAULT_HOTKEYS = {action: "" for action in ACTIONS}
 
 VK_NAMES = {
     "SPACE": 0x20, "ENTER": 0x0D, "RETURN": 0x0D, "ESC": 0x1B, "ESCAPE": 0x1B, "TAB": 0x09,

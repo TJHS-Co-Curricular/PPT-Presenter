@@ -4,7 +4,8 @@
 
 编号为 0 的 PPT 是“大会背景”（library.base_item）：
 - 大会背景 = 它的第 1 页，礼成 = 它的第 2 页（show_base），切过去不会改变待命；
-- 它永远不能被关闭（close_item / close_current 都会拒绝）。
+- 它永远不能被关闭（close_item / close_current 都会拒绝）；
+- 它放到结尾黑屏时不会自动接续，而是跳回最后一页（礼成上误按下一页也不会开始下一个节目）。
 
 “完全关闭”（close_current）：一个环节结束后，把刚播完的节目从 PowerPoint 里关掉、释放内存；
 如果它正在投影，会先切到大会背景再关，投影上不会露出桌面。
@@ -28,6 +29,7 @@ from presenter.preload import ensure_not_preloading
 _START_LOCK = threading.Lock()
 _ADVANCED = {"key": None, "at": 0.0}
 _LAST = {"id": None}          # 最近开始的节目（不含大会背景），给“完全关闭”用
+_BASE_RETURNING = threading.Event()   # 正在把大会背景从结尾黑屏跳回最后一页
 
 #: 动作 → (0 号 PPT 的第几页, 名称)
 BASE_SLIDES = {"background": (1, "大会背景"), "finale": (2, "礼成")}
@@ -173,10 +175,34 @@ def log_live_change(old, new):
                                        n.get("count"), STATE_NAMES.get(n.get("state"), n.get("state"))))
 
 
+def _stay_on_base(live):
+    """大会背景放到了结尾黑屏（例如在礼成上误按了下一页）→ 跳回最后一页，不自动接续。"""
+    if _BASE_RETURNING.is_set():
+        return
+    _BASE_RETURNING.set()
+    last = int(live.get("count") or BASE_SLIDES["finale"][0])
+
+    def run():
+        try:
+            log("自动接续", "大会背景已经是最后一页，跳回第 %d 页（编号 0 不自动接续）" % last)
+            nav("goto", last)
+        except Exception as e:
+            log("自动接续", "大会背景跳回第 %d 页没有成功：%s" % (last, e))
+        finally:
+            _BASE_RETURNING.clear()
+
+    threading.Thread(target=run, daemon=True, name="base-return").start()
+
+
 def auto_advance(old, new):
     """放映到了结尾黑屏 → 在新线程里开始待命的节目（不能在 PowerPoint 线程里等自己）。"""
     live = (new or {}).get("live") or {}
-    if live.get("state") != SHOW_DONE or not CFG.get("auto_advance", True):
+    if live.get("state") != SHOW_DONE:
+        return
+    if is_base(find_by_key(live.get("key"))):
+        _stay_on_base(live)          # 编号 0 永远不触发自动接续，投影也不停在结尾黑屏
+        return
+    if not CFG.get("auto_advance", True):
         return
     if not CFG.get("standby"):
         return                       # 节目单播完了，就停在结尾黑屏
