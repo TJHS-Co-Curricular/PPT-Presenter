@@ -15,7 +15,10 @@ from presenter.log import log
 
 
 class AppEvents:
-    """win32com.client.WithEvents 会用无参数的方式创建它，所以用类属性指向控制器。"""
+    """
+    win32com.client.WithEvents 会用无参数的方式创建它，所以用类属性指向控制器。
+    方法名和参数名（OnSlideShowNextSlide、Wn …）由 PowerPoint 规定，不能改。
+    """
     controller = None
 
     def _touch(self):
@@ -24,16 +27,16 @@ class AppEvents:
             c.dirty = True
             c.events_seen += 1
 
-    def OnSlideShowBegin(self, Wn):              # noqa: N802,N803（名字由 PowerPoint 规定）
+    def OnSlideShowBegin(self, Wn):
         self._touch()
 
-    def OnSlideShowNextSlide(self, Wn):          # noqa: N802,N803
+    def OnSlideShowNextSlide(self, Wn):
         self._touch()
 
-    def OnSlideShowNextClick(self, Wn, nEffect):  # noqa: N802,N803
+    def OnSlideShowNextClick(self, Wn, nEffect):
         self._touch()
 
-    def OnSlideShowEnd(self, Pres):              # noqa: N802,N803
+    def OnSlideShowEnd(self, Pres):
         self._touch()
 
 

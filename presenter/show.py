@@ -2,6 +2,14 @@
 """
 放映流程：开始节目、GO、待命、翻页、关闭，以及“播完自动接下一个”。
 
+编号为 0 的 PPT 是“大会背景”（library.base_item）：
+- 大会背景 = 它的第 1 页，礼成 = 它的第 2 页（show_base），切过去不会改变待命；
+- 它永远不能被关闭（close_item / close_current 都会拒绝）；
+- 它放到结尾黑屏时不会自动接续，而是跳回最后一页（礼成上误按下一页也不会开始下一个节目）。
+
+“完全关闭”（close_current）：一个环节结束后，把刚播完的节目从 PowerPoint 里关掉、释放内存；
+如果它正在投影，会先切到大会背景再关，投影上不会露出桌面。
+
 待命（CFG["standby"]）由后台管理并记在 config.json：
 - 开始任何一个节目（GO、▶、双击），它后面的那个节目自动变成待命；
 - 放映到结尾黑屏时自动开始待命的节目（控制台按钮、快捷键、翻页笔直接按在 PowerPoint 上都有效）。
@@ -12,7 +20,7 @@ import time
 
 from presenter.config import CFG, save_config
 from presenter.core import CTRL, WORKER
-from presenter.library import ITEMS, ITEMS_LOCK, get_item, next_item_id
+from presenter.library import ITEMS, ITEMS_LOCK, base_item, find_by_key, get_item, is_base, next_item_id, norm
 from presenter.log import log
 from presenter.media import MEDIA
 from presenter.powerpoint.constants import NAV_ACTIONS, SHOW_DONE, STATE_NAMES
@@ -20,6 +28,11 @@ from presenter.preload import ensure_not_preloading
 
 _START_LOCK = threading.Lock()
 _ADVANCED = {"key": None, "at": 0.0}
+_LAST = {"id": None}          # 最近开始的节目（不含大会背景），给“完全关闭”用
+_BASE_RETURNING = threading.Event()   # 正在把大会背景从结尾黑屏跳回最后一页
+
+#: 动作 → (0 号 PPT 的第几页, 名称)
+BASE_SLIDES = {"background": (1, "大会背景"), "finale": (2, "礼成")}
 AUTO_ADVANCE_DEBOUNCE = 10    # 秒：同一份 PPT 不会重复触发自动接续
 
 
@@ -57,6 +70,8 @@ def start_item(iid, slide=1, why=""):
     else:
         log("视频", "%s播放 %s" % (why, item["name"]))
         how = MEDIA.play(item["path"])
+    if not is_base(item):
+        _LAST["id"] = iid
     set_standby(next_item_id(iid))
     WORKER.notify()
     return how
@@ -77,10 +92,75 @@ def nav(action, slide=None):
     return WORKER.call(CTRL.nav, action, slide, priority=0, timeout=45)
 
 
+def _start_quiet(item, slide, label):
+    """开始放映但不改变待命（大会背景 / 礼成用）。"""
+    if not _START_LOCK.acquire(blocking=False):
+        raise Busy("正在切换中，请稍等")
+    try:
+        WORKER.call(CTRL.start, item["path"], slide, bool(CFG.get("end_previous_show", True)),
+                    priority=0, timeout=600, label=label)
+    finally:
+        _START_LOCK.release()
+    WORKER.notify()
+
+
+def show_base(action):
+    """大会背景 / 礼成：放映 0 号 PPT 的第 1 / 2 页（待命不变）。"""
+    ensure_not_preloading()
+    slide, name = BASE_SLIDES[action]
+    base = base_item()
+    if not base:
+        raise RuntimeError("节目单里没有编号为 0 的 PPT（大会背景）")
+    _start_quiet(base, slide, "%s（%s 第 %d 页）" % (name, base["name"], slide))
+
+
 def close_item(iid):
     ensure_not_preloading()
     item = get_item(iid)
-    return WORKER.call(CTRL.close, item["path"], priority=0, timeout=60)
+    if is_base(item):
+        raise RuntimeError("编号 0 是大会背景，不能关闭")
+    if item["type"] != "ppt":
+        if MEDIA.name == item["name"]:
+            MEDIA.stop()
+        WORKER.notify()
+        return True
+    if (WORKER.snapshot.get("live") or {}).get("key") == norm(item["path"]) and base_item():
+        show_base("background")       # 正在投影：先切到大会背景，投影上不会露出桌面
+    result = WORKER.call(CTRL.close, item["path"], priority=0, timeout=60,
+                         label="完全关闭 " + item["name"])
+    if _LAST["id"] == item["id"]:
+        _LAST["id"] = None
+    WORKER.notify()
+    return result
+
+
+def closable_item(snapshot=None):
+    """
+    “完全关闭”要关哪一个：正在放映的节目；如果正在放的是大会背景，就是刚才播过、还开着的那个节目。
+    只读快照，不碰 PowerPoint。没有可关的返回 None。
+    """
+    snap = snapshot if snapshot is not None else WORKER.snapshot
+    live = find_by_key((snap.get("live") or {}).get("key"))
+    if live and not is_base(live):
+        return live
+    if MEDIA.status()["playing"]:
+        with ITEMS_LOCK:
+            playing = next((it for it in ITEMS.values() if it["name"] == MEDIA.name), None)
+        if playing:
+            return playing
+    last = _LAST["id"]
+    with ITEMS_LOCK:
+        item = ITEMS.get(last) if last else None
+    if item and item["type"] == "ppt" and norm(item["path"]) in set(snap.get("loaded") or []):
+        return item
+    return None
+
+
+def close_current():
+    item = closable_item()
+    if not item:
+        raise RuntimeError("没有可以关闭的节目")
+    return close_item(item["id"])
 
 
 # ------------------------------------------------------------ 状态变化（在 PowerPoint 线程里被调用）
@@ -95,10 +175,34 @@ def log_live_change(old, new):
                                        n.get("count"), STATE_NAMES.get(n.get("state"), n.get("state"))))
 
 
+def _stay_on_base(live):
+    """大会背景放到了结尾黑屏（例如在礼成上误按了下一页）→ 跳回最后一页，不自动接续。"""
+    if _BASE_RETURNING.is_set():
+        return
+    _BASE_RETURNING.set()
+    last = int(live.get("count") or BASE_SLIDES["finale"][0])
+
+    def run():
+        try:
+            log("自动接续", "大会背景已经是最后一页，跳回第 %d 页（编号 0 不自动接续）" % last)
+            nav("goto", last)
+        except Exception as e:
+            log("自动接续", "大会背景跳回第 %d 页没有成功：%s" % (last, e))
+        finally:
+            _BASE_RETURNING.clear()
+
+    threading.Thread(target=run, daemon=True, name="base-return").start()
+
+
 def auto_advance(old, new):
     """放映到了结尾黑屏 → 在新线程里开始待命的节目（不能在 PowerPoint 线程里等自己）。"""
     live = (new or {}).get("live") or {}
-    if live.get("state") != SHOW_DONE or not CFG.get("auto_advance", True):
+    if live.get("state") != SHOW_DONE:
+        return
+    if is_base(find_by_key(live.get("key"))):
+        _stay_on_base(live)          # 编号 0 永远不触发自动接续，投影也不停在结尾黑屏
+        return
+    if not CFG.get("auto_advance", True):
         return
     if not CFG.get("standby"):
         return                       # 节目单播完了，就停在结尾黑屏

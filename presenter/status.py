@@ -2,7 +2,8 @@
 """
 发给界面的完整状态。
 
-PowerPoint 线程每 0.1 秒生成一份快照；这里只是读快照、再拼上预加载 / 视频 / 待命等信息，
+PowerPoint 线程定时生成一份快照（收到翻页事件马上刷新；放映中 1 秒兜底，没放映 0.5 秒）；
+这里只是读快照、再拼上预加载 / 视频 / 待命等信息，
 **不排队等 PowerPoint**，所以即使 PowerPoint 正在打开大文件，界面也不会卡。
 "v" 是整份状态的指纹，长轮询用它判断“有没有变化”。
 """
@@ -12,10 +13,11 @@ import json
 import os
 import time
 
+from presenter import show
 from presenter.cache import thumb_path
 from presenter.config import CFG
 from presenter.core import MOCK, WORKER
-from presenter.library import ITEMS, ITEMS_LOCK, norm
+from presenter.library import ITEMS, ITEMS_LOCK, base_item, norm
 from presenter.media import MEDIA
 from presenter.preload import PRELOAD
 
@@ -40,6 +42,10 @@ def build_status():
     st["media"] = MEDIA.status()
     st["mock"] = MOCK
     st["standby"] = CFG.get("standby") or ""
+    base = base_item()
+    st["base"] = base["id"] if base else ""
+    closable = show.closable_item(WORKER.snapshot)
+    st["closable"] = {k: closable[k] for k in ("id", "num", "title", "type")} if closable else None
     st["auto_advance"] = bool(CFG.get("auto_advance", True))
     if not st.get("error"):
         st.pop("error", None)
